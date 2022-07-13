@@ -1,0 +1,344 @@
+#include <stdio.h>
+#include <malloc.h>
+#include <string.h>
+#include <stdlib.h>
+#include "math.h"
+#include <time.h> 
+#pragma warning(disable:4996)  //忽略vs的错误
+#define MAXCHROMLENGTH 250
+#define CITYNUM 5
+#define ArcNum (CITYNUM-1)*CITYNUM/2
+#define NEIGHBORNUM ((CITYNUM-1)-1)*(CITYNUM-1)/2
+#define MAXSIZE 20
+typedef char CITYNAME[MAXSIZE];
+typedef struct ARCTYPE  //城市地图
+{
+    CITYNAME v, u;
+    float distance;
+}*MAPGRAPH;
+typedef struct
+{
+    CITYNAME city[CITYNUM + 1];  //旅行商路径,出发和终点同一个
+    float globaldistance;
+}TRAVELPATH;
+typedef struct
+{
+    int chrom[MAXCHROMLENGTH];
+    int chromlength;
+    double fitness;
+}INDIVIDUAL;
+CITYNAME cities[CITYNUM] = { "A","B","C","D","E" };
+int Index(CITYNAME city, CITYNAME cities[CITYNUM])
+{
+    int i;
+    for (i = 0; i < CITYNUM; i++)
+        if (strcmp(city, cities[i]) == 0) break;
+    return i;
+}
+void CityName(int index, CITYNAME cities[CITYNUM], CITYNAME city)
+{
+    int i;
+    for (i = 0; i < CITYNUM; i++)
+        if (i == index)
+        {
+            strcpy(city, cities[i]);
+            break;
+        }
+}
+void Coding(CITYNAME cities[CITYNUM], TRAVELPATH* trapath, INDIVIDUAL* indi)
+{
+    int i, j;
+    indi->chromlength = CITYNUM * CITYNUM;
+    for (i = 0; i < indi->chromlength; i++) indi->chrom[i] = 0;
+    indi->fitness = trapath->globaldistance;
+    for (j = 0; j < CITYNUM; j++)
+    {
+        i = Index(trapath->city[j], cities);
+        indi->chrom[j * CITYNUM + i] = 1;
+    }
+}
+void Decoding(CITYNAME cities[CITYNUM], TRAVELPATH* trapath, INDIVIDUAL* indi)
+{
+    int i, j;
+    char city[MAXSIZE];
+    for (j = 0; j < indi->chromlength; j++)
+        if (indi->chrom[j] == 1)
+        {
+            i = j % CITYNUM;
+            CityName(i, cities, city);
+            strcpy(trapath->city[j / CITYNUM], city);
+        }
+    strcpy(trapath->city[CITYNUM], trapath->city[0]);
+    trapath->globaldistance = indi->fitness;
+}
+
+
+float dist(MAPGRAPH map, CITYNAME u, CITYNAME v)
+{
+    float dis = 0;
+    int i;
+    for (i = 0; i < ArcNum; i++)
+        //if ((strcmp(map[i].u, u)) == 0 && strcmp(map[i].v, v) == 0)  //正向查找
+        if ((strcmp(map[i].u, v)) == 0 && strcmp(map[i].v, u) == 0)
+        {
+            dis = map[i].distance;
+            break;
+        }
+    return dis;
+} 
+void TraPathDis(MAPGRAPH map, TRAVELPATH* trapath)
+{
+    float dis = 0;
+    int i;
+    for (i = 0; i < CITYNUM; i++)
+        dis += dist(map, trapath->city[i], trapath->city[i + 1]);
+    trapath->globaldistance = dis;
+}
+
+
+void InitTraPath(MAPGRAPH map, CITYNAME cities[CITYNUM], CITYNAME start, TRAVELPATH* trapath)
+{
+    int i, j = 0, k, n;
+    CITYNAME cs[CITYNUM - 1], temp;
+    for (i = 0; i < CITYNUM; i++)
+        if (strcmp(cities[i], start) != 0)
+            strcpy(cs[j++], cities[i]);
+    strcpy(trapath->city[0], start);
+    strcpy(trapath->city[CITYNUM], start);
+    n = rand() % (CITYNUM - 1);
+    for (i = 0; i < n; i++)
+    {
+        j = rand() % (CITYNUM - 1);
+        k = rand() % (CITYNUM - 1);
+        if (j == k) continue;
+        strcpy(temp, cs[j]);
+        strcpy(cs[j], cs[k]);
+        strcpy(cs[k], temp);
+    }
+    for (i = 1; i < CITYNUM; i++)
+        strcpy(trapath->city[i], cs[i - 1]);
+    TraPathDis(map, trapath);
+}
+void InitIndividual(MAPGRAPH map, CITYNAME cities[CITYNUM], CITYNAME start, INDIVIDUAL* indi)
+{
+    TRAVELPATH trapath;
+    InitTraPath(map, cities, start, &trapath);
+    Coding(cities, &trapath, indi);
+}
+void InitPopulation(MAPGRAPH map, CITYNAME cities[CITYNUM], CITYNAME start, int popsize, INDIVIDUAL population[])
+{
+    int i = 0, j, k;
+    srand((unsigned)time(NULL));
+    for (i = 0; i < popsize; i++)
+    {
+        InitIndividual(map, cities, start, &population[i]);
+        for (j = 0; j < 3; j++)
+            for (k = 0; k < 3; k++);
+    }
+}
+void EvaluateIndividual(MAPGRAPH map, CITYNAME cities[CITYNUM], INDIVIDUAL* indi)
+{
+    TRAVELPATH trapath;
+    Decoding(cities, &trapath, indi);
+    TraPathDis(map, &trapath);
+    indi->fitness = trapath.globaldistance;
+}
+void EvaluatePopulation(MAPGRAPH map, CITYNAME cities[CITYNUM], int popsize, INDIVIDUAL population[])
+{
+    int i;
+    for (i = 0; i < popsize; i++)
+        EvaluateIndividual(map, cities, &population[i]);
+}
+int Efficent(INDIVIDUAL indi)
+{
+    int flag=1;
+    int i, j, k, count;
+    int (*temp)[CITYNUM] = indi.chrom;
+    for (i = 0; i < CITYNUM; i++)
+    {
+        count = 0;
+        for (j = 0; j < CITYNUM; j++)
+            if (temp[j][i] == 1) count++;
+        if (count > 1 || count == 0)
+        {
+            flag = 0;
+            break;
+        }
+    }
+    if (flag == 1)
+        for (i = 0; i < CITYNUM; i++)
+        {
+            count = 0;
+            for (j = 0; j < CITYNUM; j++)
+                if (temp[i][j] == 1) count++;
+            if (count > 1 || count == 0)
+            {
+                flag = 0;
+                break;
+            }
+        }
+    return flag;
+}
+void SelectOperator(int popsize, INDIVIDUAL population[])
+{
+    int i, j;
+    double p, sum;
+    double *ps;
+    INDIVIDUAL *newpopulation;
+    ps = (double*)malloc(popsize * sizeof(double));
+    newpopulation = (INDIVIDUAL*)malloc(popsize * sizeof(INDIVIDUAL));
+    for (sum = 0, i = 0; i < popsize; i++)
+        sum += population[i].fitness;
+    for (i = 0; i < popsize; i++)
+        ps[i] = population[i].fitness / sum;
+    for (sum = 0, i = 0; i < popsize; i++) sum += 1 - ps[i];
+    for (i = 0; i < popsize; i++) ps[i] = (1 - ps[i]) / sum;
+    for (i = 1; i < popsize; i++) ps[i] += ps[i - 1];
+    for (i = 0; i < popsize; i++)
+    {
+        p = rand() % 1000 / 1000.0;
+        for (j = 0; ps[j] < p; j++)
+        newpopulation[i] = population[j];
+    }
+    for (i = 0; i < popsize; i++)
+        population[i] = newpopulation[i];
+    free(ps);
+    free(newpopulation);
+}
+void CrossoverOperator(int popsize, INDIVIDUAL population[], double pc)
+{
+    int i, j, * index, point, temp;
+    double p;
+    index = (int*)malloc(popsize * sizeof(int));
+    for (i = 0; i < popsize; i++) index[i] = i;
+    for (i = 0; i < popsize; i++)
+    {
+        point = rand() % (popsize - i);
+        temp = index[i];
+        index[i] = index[point + i];
+        index[point + i] = temp;
+    }
+    i = 0;
+    while (i < popsize - 1)
+    {
+        p = rand() % 1000 / 1000.0;
+        if (p < pc)
+        {
+        LOOP:       point = rand() % (population[i].chromlength - 1) + 1;
+            for (j = point; j < population[i].chromlength; j++)
+            {
+                temp = population[index[i]].chrom[j];
+                population[index[i]].chrom[j] = population[index[i + 1]].chrom[j];
+                population[index[i + 1]].chrom[j] = temp;
+            }
+            if (!Efficent(population[index[i]]) || !Efficent(population[index[i + 1]]))
+            {
+                for (j = point; j < population[i].chromlength; j++)
+                {
+                    temp = population[index[i]].chrom[j];
+                    population[index[i]].chrom[j] = population[index[i + 1]].chrom[j];
+                    population[index[i + 1]].chrom[j] = temp;
+                }
+                goto LOOP;
+            }
+        }
+        i += 2;
+    }
+}
+void MutateOperator(int popsize, INDIVIDUAL population[], double pm)
+{
+    int i, j;
+    double p;
+    INDIVIDUAL indi;
+    i = 0;
+    while (i < popsize)
+    {
+    LOOP: indi = population[i];
+        for (j = CITYNUM; j < population[i].chromlength; j++)
+        {
+            p = rand() % 1000 / 1000.0;
+            if (p < pm) indi.chrom[j] = indi.chrom[j] == 0 ? 1 : 0;
+        }
+        if (Efficent(indi) == 0) goto LOOP;
+        population[i] = indi;
+        i++;
+    }
+}
+void GenerateNextPopulation(int popsize, INDIVIDUAL population[], double pc, double pm)
+{
+    SelectOperator(popsize, population);
+    CrossoverOperator(popsize, population, pc);
+    MutateOperator(popsize, population, pm);
+}
+void GetBestIndividual(int popsize, INDIVIDUAL population[], INDIVIDUAL* bestindividual, INDIVIDUAL* currentbestindividual)
+{
+    int i;
+    *bestindividual = population[0];
+    for (i = 1; i < popsize; i++)
+        if (population[i].fitness <= bestindividual->fitness)
+            *bestindividual = population[i];
+    if (bestindividual->fitness < currentbestindividual->fitness)
+        *currentbestindividual = *bestindividual;
+}
+void GA(MAPGRAPH map, CITYNAME cities[CITYNUM], char* start, int popsize, double pc, double pm, int generation, INDIVIDUAL* currentbestindividual)
+{
+    INDIVIDUAL* population, bestindividual, oldbestindividual;
+    int i;
+    population = (INDIVIDUAL*)malloc(popsize * sizeof(INDIVIDUAL));
+    InitPopulation(map, cities, start, popsize, population);
+    bestindividual = population[0];
+    for (i = 1; i < popsize; i++)
+        if (population[i].fitness < bestindividual.fitness)
+            bestindividual = population[i];
+    *currentbestindividual = bestindividual;
+    oldbestindividual = bestindividual;
+    i = 0;
+    while (i < generation)
+    {
+        GenerateNextPopulation(popsize, population, pc, pm);
+        EvaluatePopulation(map, cities, popsize, population);
+        GetBestIndividual(popsize, population, &bestindividual, currentbestindividual);
+        if (fabs(currentbestindividual->fitness - oldbestindividual.fitness) < 1e-5)
+            i++;
+        else
+        {
+            oldbestindividual = *currentbestindividual;
+            i = 0;
+        }
+    }
+}
+
+
+void priTraPath(TRAVELPATH trapath)
+{
+    int i;
+    for (i = 0; i < CITYNUM + 1; i++)
+    {
+        printf("%s  ", trapath.city[i]);
+    }printf("\n");
+    printf("global distance=%f\n", trapath.globaldistance);
+    printf("\n****************************\n");
+}
+
+int main()
+{
+    double pc = 0.5;
+    double pm = 0.1;
+    int popsize = 12;
+    int generation = 5;
+    int count = 10;
+    INDIVIDUAL currentbestindividual;
+    TRAVELPATH dectrapath;
+    CITYNAME cities[CITYNUM] = {"A","B","C","D","E"};
+    struct ARCTYPE map[ArcNum] = { {"A","B",3},{"A","C",2},{"A","D",9},{"A","E",7},{"B","C",7},{"B","D",2},{"B","E",5},{"C","D",9},{"C","E",2},{"D","E",3} };
+    char* start = "B";
+    int i;
+    for (i = 0; i < count; i++)
+    {
+        GA(map, cities, start, popsize, pc, pm, generation, &currentbestindividual);
+        printf("Result Path:"); 
+        Decoding(cities, &dectrapath, &currentbestindividual);
+        priTraPath(dectrapath);
+    }
+    return 0;
+}
