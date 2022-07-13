@@ -1,0 +1,245 @@
+#include "stdio.h"
+#include "malloc.h"
+#include "string.h"
+#define TRUE 1//定义符号常量"真"
+#define FALSE 0//定义符号常量"假"
+#define NAMESIZE 20//字符串（节点名称）长度
+typedef int STATUS;//定义状态类型，表示"真"或"假"
+typedef char NODE[NAMESIZE];//节点名称类型NODE，存储节点名称
+typedef struct BROTHERNODE *STACK;//路径堆栈Stack
+struct BROTHERNODE//兄弟节点类型，表示兄弟节点
+{
+	NODE node;//兄弟节点名称
+	struct BROTHERNODE *next;//兄弟节点连接指针，链接其他兄弟
+};
+typedef struct BROTHERNODE *BROTHER;//重命名兄弟节点类型，表示若干个兄弟节点
+struct PARENTNODE//双亲节点类型，表示子树树根节点
+{
+	NODE node;//双亲节点名称
+	BROTHER children;//所有子节点
+};
+typedef struct PARENTNODE PARENT;//重命名双亲节点类型
+struct TREENODE//树分支节点类型
+{
+	PARENT node;//双亲节点
+	struct TREENODE *next;//双亲节点指针指向其他双亲节点
+};
+typedef struct TREENODE *TREE;//重命名所有双亲节点类型，表示树的存储结构
+
+BROTHER AddABrother(BROTHER br,NODE node)//在br兄弟节点群中增加一个兄弟节点node
+{
+	BROTHER b,pb;//兄弟节点变量 
+	b=(BROTHER)malloc(sizeof(struct BROTHERNODE));//动态开辟一个兄弟单元 
+	strcpy(b->node,node);//b->next=NULL 
+	if(br==NULL)//没有兄弟节点的情况 
+		br=b;//node就是第一个兄弟 
+	else//有兄弟节点的情况 
+	{			//node就是最后一个兄弟节点 
+		pb=br;
+		while(pb->next)pb=pb->next;
+		pb->next=b;
+	 }
+	 return br; //最后一个兄弟节点 
+}
+
+TREE Form_Pa_Ch(NODE pa,BROTHER br)//双亲节点与兄弟节点构成子树 
+{
+	TREE parent;
+	parent=(TREE)malloc(sizeof(struct TREENODE));//创建双亲节点 
+	strcpy(parent->node.node,pa);
+	parent->node.children=br;//兄弟节点与双亲节点构成子树 
+	parent->next=NULL;
+	return parent;//返回带兄弟节点的双亲节点，即子树 
+}
+
+TREE AddAsubTree(TREE tree,TREE subtree)//双亲节点加入到树中 
+{
+	TREE t=tree;//临时树 
+	if(tree==NULL)//树不存在 
+		tree=subtree;//带子节点的双亲节点即为树 
+	else//树存在 
+	{
+		while(t->next) t=t->next;
+		t->next=subtree;//带子节点的双亲节点加入到树的最后 
+	}
+	return tree;//返回树指针 
+}
+
+BROTHER ClearBrothers(BROTHER br)//回收兄弟节点 
+{
+	BROTHER br1=br;//临时兄弟变量 
+	while(br)
+	{
+		br1=br;
+		br=br->next;
+		free(br1);//回收单元 
+	}
+	return br;//返回NULL 
+}
+
+TREE ClearTree(TREE tree)//回收树空间 
+{
+	TREE tree1=tree;//临时树 
+	while(tree)
+	{
+		tree1=tree;
+		tree=tree->next;
+		free(tree1);//回收单元 
+	}
+	return tree;//返回NULL 
+}
+
+void CreateStr(char *brotherset)//字符数组转换为多个字符串 
+{
+	char *c=brotherset;//临时字符串 
+	while(*c)
+	{
+		if(*c=='/') *c='\0';//插入字符串结束标志 
+		c++;
+	}
+	c++;
+	*c='\0';//多一个结束标记 
+}
+
+BROTHER CreateBrothers(BROTHER brothers,char *brotherset)
+{						//若干个节点构成兄弟 
+	char *p=brotherset;//多个节点，分隔符‘/’ 
+	NODE node;
+	CreateStr(brotherset);//变为多个字符串 
+	while(*p)
+	{
+		strcpy(node,p);//读取节点 
+		brothers=AddABrother(brothers,node);//加入兄弟关系中 
+		p+=strlen(node)+1;//下一个节点 
+	}
+	return brothers;//返回兄弟节点链表 
+}
+
+TREE CreateTree(TREE tree,char *filename)//从文件创建树 
+{
+	TREE subtree;
+	BROTHER brothers;
+	FILE *fp;
+	char parent[200],brotherset[5000];
+	fp=fopen(filename,"r");
+	while(!feof(fp))//文件中是否还存在树的节点名称 
+	{
+		fscanf(fp,"%s",parent);//读入双亲节点 
+		fscanf(fp,"%s",brotherset); 
+		brothers=NULL;//读入兄弟节点（子节点），分隔符‘/’ 
+		brothers=CreateBrothers(brothers,brotherset);//构建双亲节点 
+		subtree=Form_Pa_Ch(parent,brothers);//构建子树 
+		tree=AddAsubTree(tree,subtree);//树中加入子树 
+	}
+	fclose(fp);//关闭文件 
+	return tree;//返回所建的树 
+}
+
+BROTHER CopyBrothers(BROTHER children)//节点集复制 
+{
+	BROTHER copynode,lastnode,head=NULL;//没有子节点 
+	while(children)//分配节点单元 
+	{
+		copynode=(BROTHER)malloc(sizeof(struct BROTHERNODE));
+		strcpy(copynode->node,children->node);//复制节点 
+		copynode->next=NULL;
+		if(head==NULL)//第一个节点 
+			head=copynode;
+		else//建立连接 
+			lastnode->next=copynode;
+		lastnode=copynode;
+		children=children->next;//下一个子节点 
+	}
+	return head;//返回头节点指针 
+}
+
+BROTHER ExpandNodes(TREE tree,NODE pa)//由节点获取所有子节点 
+{
+	BROTHER children=NULL;//孩子节点 
+	TREE t=tree;//树 
+	while(t)//节点不为空 
+	{
+		if(strcmp(t->node.node,pa)==0)//找到分支节点 
+		{
+			children=CopyBrothers(t->node.children);
+			break;
+		}
+		t=t->next;//下一个双亲节点 
+	 }
+	 return children; 
+}
+
+STACK PushChildren(STACK stack,BROTHER children)//所有节点进栈 
+{
+	BROTHER p,head;
+	head=CopyBrothers(children);//复制所有节点 
+	p=head;//复制节点集并进入堆栈 
+	if(p!=NULL)//存在孩子节点 
+	{
+		while(p->next) p=p->next;//指向最后节点 
+		p->next=stack;//链表连接 
+		stack=head;
+	}
+	return stack;
+ }
+ 
+STACK PopAChild(STACK stack,NODE child)//出栈 
+{
+ 	STACK p=stack;//出栈 
+ 	if(p!=NULL)//堆栈不为空 
+ 	{
+ 		strcpy(child,p->node);//获取节点名称 
+ 		stack=p->next;//栈顶后移 
+		 free(p); //回收节点单元 
+	 }
+	 return stack;//返回堆栈头指针 
+  }
+  
+STACK ClearStack(STACK stack)//回收栈空间 
+ {
+ 	stack=ClearBrothers((BROTHER)stack);//清除所有节点，得到空指针 
+ 	return stack;//返回空指针 
+  }
+
+STATUS Search (TREE tree,NODE start,NODE end)
+{				//在tree中，判断节点end是否在以节点strategic为根的子树中 
+	TREE pnode;//树分支节点 
+	NODE node;//节点名称 
+	BROTHER children;//节点点集 
+	STACK stack;//堆栈 
+	STATUS flag=FALSE;//节点在子树中标识，FALSE表示不存在，默认值 
+	if(tree==NULL) return flag;//树不在，不在子树中 
+	stack=(STACK)malloc(sizeof(struct BROTHERNODE));//开辟堆栈空间 
+	stack->next=NULL;//堆栈只有子树跟节点strat，开始节点进栈 
+	strcpy(stack->node,start);
+	while(stack)//堆栈不为空 
+	{
+		stack=PopAChild(stack,node);//出栈，保留在node中 
+		if(strcmp(end,node)==0)//是否为目标节点 
+		{
+			flag=TRUE;//找到目标节点，修改状态标识为TRUE 
+			break;//结束查照 
+		} 
+		children=ExpandNodes(tree,node);//当前节点node的下一级所有节点 
+		stack=PushChildren(stack,children);//所有节点进栈 
+	}
+	ClearStack(stack);//回收堆栈数据空间 
+	return flag;//返回是否找到目标节点标识FALSE或TRUE 
+}
+
+void main()//判断一个节点是否在树中 
+{
+	NODE start,end;//子树节点、目标节点 
+	TREE tree;//链式存储结构树 
+	STATUS flag;//目标是否在子树中标识 
+	char *filename="C:\\Users\\NONAME\\Desktop\\tree.txt";//树数据文件 
+	tree=CreateTree(tree,filename);//创建链式存储结构树 
+	printf("The Start Node:");
+	scanf("%s",start);//输入子树跟节点名称 
+	printf("The End Node:");
+	scanf("%s",end);//输入目标节点名称 
+	flag=Search(tree,start,end);
+	printf("Search %s from %s, Status=%d\n",end,start,flag);//输出是否存在的标识 
+	printf("=====================\n");
+	ClearTree(tree);//回收树空间 
+}
