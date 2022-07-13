@@ -1,0 +1,78 @@
+#include <stdio.h>
+
+int main()
+{
+	FILE *fp,*fp3;
+	char ch,ch3;
+	fp=fopen("file1.txt","r");
+	fp3=fopen("file3.txt","w");
+	ch=fgetc(fp);
+	while(ch!=EOF){
+		if(ch>='A'&&ch<='Z'){
+		ch3=(ch-'A'+5)%26+'A';
+		ch=fgetc(fp);
+		}
+		else if(ch>='a'&&ch<='z'){
+		ch3=(ch-'a'+5)%26+'a';
+		ch=fgetc(fp);
+		}
+		else{
+			printf("检测到输入中有其他字符，请输入字母");
+		}
+		fputc(ch3,fp3);
+		}
+	
+	fclose(fp);
+	fclose(fp3);
+	
+	return 0;
+	
+} 
+
+
+#include <stdio.h>
+
+int main()
+{
+	FILE *hp,*hp1;
+	char ch,ch1;
+	hp=fopen("file1.txt","r");
+	hp1=fopen("file1.txt","r+");
+	ch=fgetc(hp);
+	while(ch!=EOF){
+		if(ch>='A'&&ch<='Z'){
+		ch1=(ch-'A'+5)%26+'A';
+		ch=fgetc(hp);
+		}
+		else if(ch>='a'&&ch<='z'){
+		ch1=(ch-'a'+5)%26+'a';
+		ch=fgetc(hp);
+		}
+		else{
+			printf("检测到输入中有其他字符，请输入字母"); 
+		}
+		fputc(ch1,hp1);	
+	}
+	
+	fclose(hp); 
+	fclose(hp1);
+	
+	return 0;
+ } 
+ 
+ 
+ #include <stdio.h>
+
+int main()
+{
+	FILE *fp;
+	char ch;
+	fp=fopen("file1.txt","w");//打开文件 
+	ch=getchar();//输入字母 
+	while(ch!='\n'){
+		fputc(ch,fp);
+		ch=getchar();
+	}//将字母写入文件 
+	fclose(fp);//关闭文件 
+	return 0;	
+ }
