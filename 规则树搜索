@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <string.h>
+#include <malloc.h>
+#define FactSize 50//事实的最大长度 
+#define STATUS int//逻辑状态类型 
+#define TRUE 1//逻辑真 
+#define FALSE 0//逻辑假 
+typedef char FACT[FactSize];//事实类型FACT 
+struct FACTNODE//事实节点类型 
+{
+	FACT fact;//一个事实 
+	struct FACTNODE *next;//多个事实链接 
+ };
+typedef struct FACTNODE *FACTS;//事实库（集合）类型FACTS 
+
+FACTS facts;
+typedef struct//规则类型 
+{
+	FACTS ifs;//多个前提（事实集合）ifs 
+	FACTS thens;//多个结论（事实集合）thens 
+ }RULE;//规则类型 
+struct RULENODE//规则节点类型 
+{
+	RULE rule;//一条规则 
+	struct RULENODE *next;//规则链接 
+ };
+typedef struct RULENODE *RULES;//规则库类型 
+FACTS AddAFact(FACTS facts,FACT newfact)//在事实库facts中增加一个事实newfact 
+{
+	struct FACTNODE *factnode,*lastnode;//事实节点指针 
+	factnode=(struct FACTNODE *)malloc(sizeof(struct FACTNODE));//分配事实空间 
+	strcpy(factnode->fact,newfact);//复制事实，形成节点 
+	factnode->next=NULL;
+	if(facts==NULL)//事实库为空，创建事实库 
+		facts=factnode;
+	else//已有事实库 
+	{
+		lastnode=facts;
+		while(lastnode->next!=NULL) lastnode=lastnode->next;//指针后移 
+		lastnode->next=factnode;//插入事实节点 
+	 } 
+	 return facts;
+ } 
+void priFacts(FACTS facts)//显示事实库所有事实，用分隔符“/”分隔多个字符 
+{
+	while(facts!=NULL)//事实库存在 
+	{
+		printf("%s",facts->fact);//显示一个事实 
+		facts=facts->next;//指针后移 
+		if(facts!=NULL) printf(",");//显示分隔符 
+	}
+	printf("\n");
+ } 
+void CreateStr(char *factset)//将字符数组转换为多个字符串，又把字符串中的事实分隔符“/”改为“\0”，即成为多个事实字符串 
+{
+	char *c=factset;
+	while(*c)
+	{
+		if(*c=='/') *c='\0';//插入字符串结束标志 
+		c++;
+	}
+	c++;
+	*c='\0';//多一个结束标志 
+}
+FACTS CreateFacts(FACTS facts,char *factset)//将若干事实加入事实库中 
+{
+	char *p=factset;//多个事实，用“/”隔开 
+	FACT fact;//事实 
+	CreateStr(factset);//将字符串数组转化为多个事实 
+	while(*p)
+	{
+		strcpy(fact,p);//读取一个事实 
+		facts=AddAFact(facts,fact);//将事实加入事实库中 
+		p+=strlen(fact)+1;//下一个事实 
+	}
+	return facts;
+}
