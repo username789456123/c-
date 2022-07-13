@@ -1,0 +1,159 @@
+#include <stdio.h>
+#include <string.h>
+#include <malloc.h>
+#include <stdlib.h>
+#include <time.h>
+#define MAXSIZE 20//城市名称长度
+#define FALSE 0 
+#define TRUE 1
+#define CITYNUM 5//城市数量 
+#define ArcNum (CITYNUM-1)*CITYNUM/2//城市连接边数，双向图
+#define NEIGHBORNUM ((CITYNUM-1)-1)*(CITYNUM-1)/2//可派生旅行商路径数
+typedef int STATUS;
+typedef char CITYNAME[MAXSIZE];//城市名称
+typedef struct ARCTYPE//城市连接边类型
+{
+	CITYNAME v,u;//两个城市 
+	float distance;//两个城市的距离 
+}*MAPGRAPH;
+typedef struct
+{
+	CITYNAME city[CITYNUM+1];//旅行商路径
+	float globaldistance;//旅行商走过的城市的总长度
+}TRAVELPATH;//旅行商路径类型 
+TRAVELPATH trapath={{"A","D","E","C","B","A"},24};
+float dist(MAPGRAPH map,CITYNAME u,CITYNAME v)//两城市之间的距离 
+{
+	float dis=0;//距离初始化 
+	int i;
+	for(i=0;i<ArcNum;i++)//城市地图为无向图，即所有边是双向的，遍历地图 
+		if((strcmp(map[i].u,u)==0&&strcmp(map[i].v,v)==0)||(strcmp(map[i].u,v)==0&&strcmp(map[i].v,u)==0))
+		{
+			dis=map[i].distance;
+			break;
+		}
+	return dis;
+}
+void TraPathDis(MAPGRAPH map, TRAVELPATH *trapath)//旅行商路径总长度
+{
+	float dis=0;//路径初始化 
+	int i;
+	for(i=0;i<CITYNUM;i++)//所有城市 
+		dis+=dist(map,trapath->city[i],trapath->city[i+1]);//两个城市间距离 
+	trapath->globaldistance=dis;
+}
+void CopyTraPath(TRAVELPATH *trapath,TRAVELPATH *newtrapth)//复制旅行商路径
+{
+	int i;
+	for(i=0;i<CITYNUM+1;i++)//复制每个城市
+		strcpy(newtrapth->city[i],trapath->city[i]);
+}
+void ExchangeCityForTraPath(TRAVELPATH *trapath,int loci,int locj)//在旅行商路径中交换两个城市
+{
+	CITYNAME temp;
+	strcpy(temp,trapath->city[loci]);//两个城市名交换 
+	strcpy(trapath->city[loci],trapath->city[locj]);
+	strcpy(trapath->city[locj],temp);
+}
+TRAVELPATH *ExpandTraPaths(MAPGRAPH map,TRAVELPATH *trapath)//给定路径并派生其邻近所有路径
+{
+	CITYNAME *trapath1,temp;
+	int i,loci,locj;//循环控制变量，城市位置变量 
+	TRAVELPATH *neighbors;//派生所有邻近路径
+	neighbors=(TRAVELPATH *)malloc(sizeof(TRAVELPATH)*NEIGHBORNUM);//分配空间
+	for(i=0;i<NEIGHBORNUM;i++)  //复制路径 
+		CopyTraPath(trapath,&neighbors[i]);//复制NEIGHBORNUM次当前路径
+	for(i=0,loci=1;loci<CITYNUM-1;loci++) //所有交换位置
+		for(locj=loci+1;locj<CITYNUM;locj++)//交换所有可能路径中的两个城市，生成派生路径 
+		{
+			ExchangeCityForTraPath(&neighbors[i],loci,locj);//交换loci和locj两个城市 
+			TraPathDis(map,&neighbors[i]);//派生路径的长度
+			i++;//旅行商的下一条路径 
+		}
+	return neighbors;//所有派生路径
+}
+void ClearAllTraPaths(TRAVELPATH *neighbors)//回收所有派生最近邻旅行商路径
+{
+	free(neighbors);//回收数据单元 
+}
+void InitTraPath(MAPGRAPH map,CITYNAME cities[CITYNUM],CITYNAME start,TRAVELPATH *trapath)
+{
+	int i,j=0,k,n;
+	CITYNAME cs[CITYNUM-1],temp;//除出发城市外的所有城市 
+	for(i=0;i<CITYNUM;i++)//所有城市 
+		if(strcmp(cities[i],start)!=0)//去除出发城市（也是重点城市） 
+			strcpy(cs[j++],cities[i]);//保留除出发城市外的其他城市 
+	strcpy(trapath->city[0],start);//旅行商出发城市 
+	strcpy(trapath->city[CITYNUM],start);//旅行商终点城市 
+	srand((unsigned)time(NULL));//当前计算机时间为随机数种子 
+	n=rand()%(CITYNUM-1);//0~CITYNUM-2随机数构成循环次数
+	for(i=0;i<n;i++)//随机循环CITYNUM-1次 ，形成旅行商随机路径，即搜索空间的随机节点 
+	{
+		j=rand()%(CITYNUM-1);//随机数的下标为0~CITYNUM-2
+		k=rand()%(CITYNUM-1);//随机数的下标为0~CITYNUM-2
+		if(j==k) continue;//下标相同，无须交换 
+		strcpy(temp,cs[j]);//下标不同，交换城市 
+		strcpy(cs[j],cs[k]);
+		strcpy(cs[k],temp);
+	}
+	for(i=1;i<CITYNUM;i++)//形成旅行商随机路径，即搜索空间的随机节点 
+		strcpy(trapath->city[i],cs[i-1]);// 放回旅行商路径中
+	TraPathDis(map,trapath);//旅行商路径总长度 
+}
+void SearchResult(MAPGRAPH map,TRAVELPATH *trapath,TRAVELPATH *trapathres)//旅行商最短路径求解 
+{
+	TRAVELPATH *neighbors;//所有派生的旅行商路径
+	STATUS flag=FALSE;//默认当前最小
+	int i;
+	CopyTraPath(trapath,trapathres);//复制旅行商初始路径
+	TraPathDis(map,trapathres);//计算路径的总长度
+	while(TRUE)//无限搜索 
+	{
+		neighbors=ExpandTraPaths(map,trapathres);//产生旅行商所有邻近路径集合
+		for(i=0;i<NEIGHBORNUM;i++)//逐一比较判断旅行商路径
+			if(trapathres->globaldistance>neighbors[i].globaldistance)//当前旅行商路径的长度比某个邻近路径的长度长，但不一定最长 
+			{
+				flag=TRUE;//找到邻近更短的旅行商路径
+				CopyTraPath(&neighbors[i],trapathres);//更新更短的旅行商路径
+				TraPathDis(map,trapathres);//更新更短的旅行商路径的长度
+				break;
+			}
+		if(flag==TRUE)//邻近有更短的旅行商路径 
+			flag=FALSE;//再次查找
+		else//邻近没有更短的旅行商路径，即当前为最短路径 
+			break;//结束查找
+		ClearAllTraPaths(neighbors);//清除所有邻近旅行商路径
+	}
+}
+
+void priTraPath(TRAVELPATH trapath)
+{
+	int i=0;
+	for(i=0;i<CITYNUM;i++) 
+	{
+		printf(trapath.city[i]);
+		printf("-->");
+	}	//输出数组city的内容 
+	printf(trapath.city[i]);
+	printf("\n");
+	printf("路径长度：");
+	printf("%f",trapath.globaldistance);//计算路径长度 
+	printf("\n");
+}
+int main()
+{
+	int i,j,k;
+	TRAVELPATH trapathres;//定义后面要用到的trapapthres 
+	CITYNAME cities[CITYNUM]={"A","B","C","D","E"};//各个城市的集合
+	struct ARCTYPE map[ArcNum]={{"A","B",3},{"A","C",2},{"A","D",9},{"A","E",7},{"B","D",2},{"B","E",5},{"C","D",9},{"C","E",2},{"D","E",3}};//城市地图
+	for(i=0;i<2;i++)//求解2次最短旅行商路径 
+	{
+		InitTraPath(map,cities,"A",&trapath); //初始化旅行商路径 
+		printf("Init Path:");//显示旅行商路径 
+		priTraPath(trapath);
+		SearchResult(map,&trapath,&trapathres);//最短旅行商路径的求解
+		printf("Result Path:");//显示旅行商路径
+		priTraPath(trapathres);
+	}
+	return 0;
+}
