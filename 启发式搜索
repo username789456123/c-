@@ -1,0 +1,583 @@
+#include<stdio.h>
+#include<stdlib.h> 
+#include<string.h>
+#include<malloc.h>
+#define MAXSIZE 3
+#define ZERO 0
+#define TRUE 1
+#define FALSE 0
+
+typedef int STATUS;//重命名标识符类型  TRUE为1，FALSE为0 
+typedef int NODETYPE[MAXSIZE][MAXSIZE];//九宫格类型 
+typedef struct
+{
+	NODETYPE node;
+	float evaluate;//与目标不符的方格数，记录未来开销信息 h
+	double step;//直到当前节点为止搜索过的步数，记录历史开销信息 g 
+} NODE;
+
+struct NEIGHBORNODE//相邻节点类型
+{
+	NODE node;
+	struct NEIGHBORNODE *next;//下一个节点指针 
+};
+typedef struct NEIGHBORNODE *NEIGHBOR;//相邻节点     NEIGHBORNODE类型
+typedef struct NEIGHBORNODE *PATH;//路径    NEIGHBORNODE类型
+
+struct Paths//路径结构体 
+{
+	PATH path;
+	struct Paths *next;//下一个路径节点指针
+};
+typedef struct Paths *PATHS;//重命名路径结构体
+typedef struct Paths *STACK;//路径栈 
+
+STATUS equal(NODE *node1,NODE *node2)//节点（矩阵）相同 
+{
+	int i=0,j=0;//二维数组行下标和列下标 
+	STATUS flag=TRUE;//flag标识，默认九宫格相同为 TRUE
+	for(i=0;i<MAXSIZE;i++)//行下标变化 
+	{
+		for(j=0;j<MAXSIZE;j++)//列下标变化 
+			if (node1->node[i][j]!=node2->node[i][j])
+			{
+				flag=FALSE;
+				break;
+			}
+		if(flag==FALSE)
+			break;
+	}
+	return flag;
+}
+
+void setvalue(NODE *node1, NODE *node2)//节点（矩阵）赋值  node2赋值给node1 
+{
+	int i,j; //二维数组行下标和列下标 
+	for(i=0;i<MAXSIZE;i++) //行下标变化 
+		for(j=0;j<MAXSIZE;j++)//列下标变化 
+			node1->node[i][j]=node2->node[i][j];	//对应元素赋值 
+	node1->evaluate=node2->evaluate;//启发信息
+	node1->step=node2->step;
+}
+
+void priNode(NODE *node)//显示节点（矩阵）
+{
+	int i=0,j=0;//二维数组行下标和列下标 
+	for(i=0;i<MAXSIZE;i++)//行下标变化 
+	{
+		for(j=0;j<MAXSIZE;j++)//列下标变化 
+			printf("%5d",node->node[i][j]);
+		printf("\n");
+	}
+	printf("#############################\n");
+}
+
+NEIGHBOR AddAnAdjacents(NEIGHBOR adjacents, NODE *node)//增加新的节点 
+{
+	NEIGHBOR a1,a2;
+	a1=(NEIGHBOR)malloc(sizeof(struct NEIGHBORNODE));//动态开辟空间 
+	setvalue(&(a1->node),node);
+	a1->next=NULL;
+	if(adjacents==NULL) 	//之前没有节点 
+		adjacents=a1;//a就是第一个节点 		
+	else//之前有节点    node就是最后一个节点
+	{		
+		a2=adjacents;
+		while(a2->next)
+			a2=a2->next;
+		a2->next=a1;
+	}
+	return adjacents;
+}
+
+STATUS Locate(NODE *node,int *hori,int *vert,int zero)//确定空格的位置 
+{
+	int i,j;  //二维数组行下标和列下标 
+	STATUS flag=FALSE;//flag标识，默认九宫格相同为 FALSE
+	for(i=0;i<MAXSIZE;i++)  //行下标变化 
+	{
+		for(j=0;j<MAXSIZE;j++)//列下标变化 
+			if(node->node[i][j]==zero)
+			{
+				*hori=i;//空格所在的行和列
+				*vert=j;
+				flag=TRUE;//找到空格，结束 
+				break;
+			}
+		if(flag==TRUE)
+			break;       //找到空格，结束
+	}
+	return flag;                    //是否找到空格
+}
+void Exchange(NODE *node,int hori1,int vert1,int hori2,int vert2)//[hori1][vert1]和[hori2][vert2]交换位置 
+{	
+	int tempnode;
+	tempnode=node->node[hori1][vert1];
+	node->node[hori1][vert1]=node->node[hori2][vert2];
+	node->node[hori2][vert2]=tempnode;
+}
+
+NEIGHBOR ExpandNodes(NODE *node,int zero)//生成新的节点集合 
+{
+	NEIGHBOR adjacents=NULL;//所有派生的节点集合 
+	int h,v; //空格位置
+	NODE tempnode; //临时节点
+	if(!Locate(node, &h, &v, zero)) //没找到空格位置，如果找到 空格位置为[h][v] 
+		return adjacents;	
+	if(h==0&&v==0)//空格位置
+	{
+		setvalue(&tempnode, node);//对九宫格的节点赋值
+		Exchange(&tempnode, h, v, h+1, v);//交换位置
+		adjacents=AddAnAdjacents(adjacents, &tempnode);//收集新的节点
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v ,h, v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==0&&v==1)//空格位置
+	{
+		setvalue(&tempnode, node);//对九宫格节点赋值
+		Exchange(&tempnode, h, v, h, v-1);//交换位置
+		adjacents=AddAnAdjacents(adjacents, &tempnode);//收集新的节点
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h ,v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h+1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==0&&v==2)//空格位置
+	{
+		setvalue(&tempnode, node);//对九宫格节点赋值
+		Exchange(&tempnode, h, v, h, v-1);//交换位置
+		adjacents=AddAnAdjacents(adjacents, &tempnode);//收集新的节点
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h+1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==1&&v==0)//空格位置
+	{
+		setvalue(&tempnode, node);//对九宫格节点赋值
+		Exchange(&tempnode, h, v, h-1, v);//交换位置
+		adjacents=AddAnAdjacents(adjacents, &tempnode);//收集新的节点
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h+1 ,v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==1&&v==1)
+	{
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h-1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h+1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v-1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==1&&v==2)
+	{
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h-1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h+1 ,v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v-1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==2&&v==0)
+	{
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h-1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==2&&v==1)
+	{
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h-1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h ,v-1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v+1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	else if(h==2&&v==2)
+	{
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h-1, v);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+		setvalue(&tempnode, node);
+		Exchange(&tempnode, h, v, h, v-1);
+		adjacents=AddAnAdjacents(adjacents, &tempnode);
+	}
+	return adjacents;
+}
+
+float Evaluate(NODE *node1, NODE *node2)//两个状态中不同数字的个数 
+{
+	int i,j;//行下标与列下标
+	float res=0; //数字不同的个数，默认为0 
+	for(i=0;i<MAXSIZE;i++) //行下标
+		for(j=0;j<MAXSIZE;j++)  //列下标
+			if(node1->node[i][j]!=node2->node[i][j])
+				res++; //累加不同数字的个数
+	return res;//返回数字的不同的个数
+}
+
+void EvaluateAdjacents(NEIGHBOR adjacents,NODE *node,NODE *end)//根据当前状态评估所有状态
+{
+	NEIGHBOR br=adjacents;
+	while(br)
+	{
+		br->node.evaluate=Evaluate(&(br->node), end);//与目标状态的差异 
+		br->node.step=node->step+1;//在当前状态深度加深 
+		br=br->next;
+	}
+}
+
+PATH AddANodeToPath(NODE *node,PATH path)//头插法将节点加入路径 
+{
+	PATH p;
+	p=(NEIGHBOR)malloc(sizeof(struct NEIGHBORNODE));
+	setvalue(&(p->node),node);
+	if(path==NULL)
+		p->next=NULL;
+	else
+		p->next=path;
+	path=p;
+	return path;
+}
+
+NEIGHBOR CopyNeighbor(NEIGHBOR adj)//复制全部节点 
+{
+	NEIGHBOR copynode,lastnode,head=NULL;
+	while(adj)
+	{
+		copynode=(NEIGHBOR)malloc(sizeof(struct NEIGHBORNODE));//分配空间 
+		setvalue(&(copynode->node),&(adj->node));	//复制节点
+		copynode->next=NULL;
+		if(head==NULL) //第一个节点
+			head=copynode;
+		else //建立链接，复制节点集
+			lastnode->next=copynode;
+		lastnode=copynode;
+		adj=adj->next;	//下一个节点
+	}
+	return head;//返回头节点指针
+}
+
+PATH CopyPath(PATH path)//复制路径 
+{
+	PATH tempath;
+	tempath=(PATH)CopyNeighbor((NEIGHBOR)path);//Neighbor和 PATH结构相同 
+	return tempath;
+}
+
+STACK PushAPath(STACK stack,PATH path)//一条路径压入堆栈
+{
+	PATH tempath;
+	STACK st;
+	tempath=CopyPath(path);//复制路径 
+	st=(struct Paths*)malloc(sizeof(struct Paths));//开辟路径节点空间 
+	st->path=tempath;//路径放入堆栈 
+	if(stack==NULL)//第一条路径 
+		st->next=NULL;
+	else//已有路径 
+		st->next=stack;
+	stack=st;
+	return stack;
+}
+
+PATHS CopyPaths(PATHS paths)//复制路径集 
+{
+	PATHS head=NULL,copynode,lastnode;
+	while(paths)
+	{
+		copynode=(struct Paths*)malloc(sizeof(struct Paths));//分配空间 
+		copynode->path=CopyPath(paths->path);
+		copynode->next=NULL;
+		if (head==NULL)
+			head=copynode;
+		else
+			lastnode->next=copynode;
+		lastnode=copynode;
+		paths=paths->next;
+	}
+	return head;
+}
+
+STACK PushPaths(STACK stack,PATHS paths)//把路径集压入堆栈
+{
+	PATHS p,head;
+	head=CopyPaths(paths);
+	p=head;
+	if(p!=NULL)
+	{
+		while(p->next)
+			p=p->next;
+		p->next=stack;
+		stack=head;
+	}
+	return stack;
+}
+
+STACK PopANode_Heuristic_by_Mini(STACK stack,NODE *node,PATH *path)//启发式搜索，退出堆栈，获取节点和路径 
+{
+	STACK p=stack,p1=NULL,p2=NULL,p3=NULL;//p3最优节点，p2历史节点，p1当前节点 
+	PATH tempath=NULL;//临时路径
+	double ev=1e100;//足够小 
+	if(p==NULL)//没有堆栈 
+		return stack;
+	*path=NULL;//清空路径
+	while(p!=NULL)//遍历堆栈
+	{
+		tempath=p->path;//获取路径
+		if (tempath->node.evaluate+tempath->node.step<ev) //启发式信息比较
+		{
+			ev=tempath->node.evaluate+tempath->node.step;//更新最优启发式信息
+			p2=p1;//下一个节点，评价值最优的节点 
+			p3=p;//当前节点 （最优节点） 
+		}
+		p1=p;//当前节点
+		p=p->next;//下一个堆栈节点 
+	}
+	tempath=p3->path;//当前节点路径（最优当前节点） 
+	setvalue(node, &(tempath->node)); //节点赋值
+	*path=CopyPath(tempath); //复制路径，获取路径
+	if (p3==stack) //没有最优节点，删除头结点，指针后移 
+		stack=p3->next;
+	else
+		p2->next=p3->next;//删除最优节点 
+	free(p3);//回收空间 
+	return stack;// 返回堆栈 
+}
+
+STATUS IsInPath(NODE *node,PATH path)//判断是否在路径中 
+{
+	PATH p=path;
+	STATUS flag=FALSE;
+	while(p)
+	{
+		if(equal(node,&(p->node))==TRUE)
+		{
+			flag=TRUE;
+			break;
+		}
+		else
+			p=p->next;
+	}
+	return flag;
+}
+
+NEIGHBOR DeleteNodeInPath(NEIGHBOR adjacents,PATH path)//路径中删除节点 
+{
+	NEIGHBOR n1=adjacents,n2;
+	STATUS flag=FALSE;
+	while(n1)
+	{
+		flag=IsInPath(&(n1->node),path);//是否在路径中 
+		if(flag==TRUE)//在 
+		{
+			if(n1==adjacents)
+			{
+				adjacents=n1->next;
+				free(n1);
+				n1=adjacents;
+			}
+			else
+			{
+				n2->next=n1->next;
+				free(n1);
+				n1=n2->next;
+			}
+		}
+		else//不在 
+		{
+			n2=n1;
+			n1=n1->next;
+		}
+	}
+	return adjacents;
+}
+
+NEIGHBOR ClearNeighbor(NEIGHBOR adj)//回收相邻节点空间(删除相邻节点)
+{
+	NEIGHBOR a=adj;//临时相邻节点 
+	while(adj)
+	{
+		a=adj;
+		adj=adj->next;
+		free(a);//回收空间 
+	}
+	return adj;//返回NULL
+}
+
+PATH ClearPath(PATH path)//清除路径 
+{
+	path=(PATH)ClearNeighbor(path);// PATH与 NEIGHBOR形式相同
+	return path;
+}
+
+PATHS ClearPaths(PATHS paths)//清除路径集
+{
+	PATHS p=NULL;
+	while(paths)//存在路径集
+	{
+		p=paths;
+		ClearPath(p->path);//回收一条路径 
+		paths=paths->next;//下一条路径 
+		free(p);//回收空间 
+	}
+	return paths;//返回NULL
+}
+
+STACK ClearStack(STACK stack)//清空堆栈
+{
+	stack=ClearPaths(stack);// STACK与 Paths形式相同 
+	return stack;//返回空指针
+}
+
+PATHS AddAPathToPaths(PATH path,PATHS paths)//把路径加入到路径集
+{
+	PATH copypath=NULL;
+	PATHS p=NULL,p1;
+	if(path==NULL)//没有路径 
+		return paths;
+	copypath=CopyPath(path);//复制路径 
+	p=(PATHS)malloc(sizeof(struct Paths));//开辟路径集合空间 
+	p->next=NULL;
+	p->path=copypath;//复制的路径置入
+	if(paths==NULL)//之前没有路径 （路径集为空） 
+		paths=p;
+	else     //之前有路径（路径集不为空）  尾插法 
+	{
+		p1=paths;
+		while(p1->next)
+			p1=p1->next;
+		p1->next=p;
+	}
+	return paths;
+}
+
+PATHS FormPaths(NEIGHBOR adjacents,PATH path,PATHS paths)//相邻节点集加入路径，路径加入路径集 
+{
+	PATH tempath=NULL;
+	adjacents=DeleteNodeInPath(adjacents,path);
+	while (adjacents)//存在节点
+	{
+		tempath=CopyPath(path);//复制路径 
+		tempath=AddANodeToPath(&(adjacents->node), tempath);//节点加入路径 
+		paths=AddAPathToPaths(tempath, paths);//路径加入路径集 
+		adjacents=adjacents->next;//下一个节点 
+	}
+	return paths;//返回路径集合 
+}
+
+STATUS SearchPath(NODE *start,NODE *end,PATH *path,int zero)//启发式搜索  判断节点是否在其中，并获取路径 
+{
+	NODE node;//节点 
+	NEIGHBOR adjacents=NULL;//相邻节点集合 
+	STACK stack=NULL;//线性空间（并不是完全的堆栈） 
+	STATUS flag=FALSE;//搜索是否成功（标识符，默认为FALSE）
+	PATH tempath=NULL; //临时路径
+	PATHS paths=NULL;//生成新的路径集合
+	start->step=0;//设置初始搜索深度
+	start->evaluate=Evaluate(start,end);//不相等数初始化 
+	tempath=AddANodeToPath(start,tempath);//形成路径
+	stack=PushAPath(stack,tempath);//路径进栈
+	while(stack)
+	{
+		tempath=ClearPath(tempath);//清空路径
+		stack=PopANode_Heuristic_by_Mini(stack,&node,&tempath);//最优节点 
+		if (equal(end,&node)==TRUE)//最优节点是否是目标节点
+		{
+			flag=TRUE;//修改标识符
+			*path=CopyPath(tempath);//获取路径 
+			break;//退出求解 
+		}
+		adjacents=ExpandNodes(&node,zero);//搜索下一级所有节点
+		EvaluateAdjacents(adjacents,&node,end);//计算启发式信息的值
+		paths=FormPaths(adjacents,tempath,paths);//形成路径集合
+		stack=PushPaths(stack,paths); //所有新的路径进栈 
+		paths=ClearPaths(paths);//清空所有路径 
+	}
+	ClearStack(stack); //清空堆栈 
+	return flag;
+}
+
+PATH RevPath(PATH path)//路径倒序 
+{ 
+	PATH p=path->next,p1=NULL;
+	path->next=NULL;
+	while(p)//路径倒序
+	{
+		p1=p->next;
+		p->next=path;
+		path=p;
+		p=p1;
+	}
+	return path;
+}
+
+void priNeighbors(NEIGHBOR adjacents)//输出相邻节点 
+{
+	NEIGHBOR br=NULL;
+	br=adjacents;
+	while(br)
+	{
+		priNode(&(br->node));
+		br=br->next;
+	}
+	printf("\n");
+}
+
+void priPath(PATH path)//输出路径
+{
+	priNeighbors((NEIGHBOR)path);//NEIGHBOR 与 Path类型相同 
+}
+
+long int LengthOfPath(PATH path)//计算路径长度 
+{
+	long int i=0;
+	PATH p=path;
+	while(p)
+	{
+		i++;
+		p=p->next;
+	}
+	return i-1;
+}
+
+int main()
+{
+	STACK stack=NULL;//路径堆栈 
+	PATH path=NULL;//路径
+	STATUS flag=FALSE;//是否找到路径的标识，默认为FALSE
+	NODE start={{{1,2,3},{8,4,5},{7,0,6}},0,0} ;//初始状态 
+	NODE end={{{1,2,3},{8,0,4},{7,6,5}},0,0} ;//目标状态 
+	printf("从该节点开始：\n");//显示初始状态 
+	priNode(&start);
+	printf("到该节点结束：\n");//显示目标状态
+	priNode(&end);
+	flag=SearchPath(&start, &end, &path, ZERO);//求解路径
+	printf("路径:\n");//显示路径
+	path=RevPath(path);
+	priPath(path);
+	printf("Step=%ld,Status=%d\n",LengthOfPath(path),flag);
+	printf("============================================\n");
+	ClearPath(path);
+	return 0;
+}
