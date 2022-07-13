@@ -1,0 +1,463 @@
+#include<stdio.h>
+#include<stdlib.h> 
+#include<string.h>
+#include<malloc.h>
+#define NAMESIZE 30  // 节点名称大小
+#define TRUE 1
+#define FALSE 0
+
+typedef int Status;//定义标识符，表示真或假 
+typedef char Node[NAMESIZE];//定义节点名称
+typedef struct BROTHERNODE
+{
+	Node node;//节点名称 
+	struct BROTHERNODE *next;//下一个节点指针
+} Brother;//重命名兄弟节点 
+typedef Brother Path;//兄弟节点类型堆栈Stack
+
+typedef struct PARENTNODE
+{
+	Node node;//节点名称
+	Brother *children;//兄弟节点
+	struct PARENTNODE *next;//下一个节点指针
+} Tree;//重命名树节点 （双亲节点），双亲节点构成树，兄弟节点构成双亲节点
+
+typedef struct PATH//路径结构体 
+{
+	Path *path;//节点类型为兄弟节点 
+	struct PATH *next;// 下一个节点指针
+}Paths;//重命名路径结构体 
+typedef Paths Stack;//路径堆栈Stack
+Brother *AddABrother(Brother *br,Node node)//在br兄弟节点群中增加一个兄弟节点node 
+{
+	Brother *b1=NULL,*b2=NULL;
+	b1=(Brother *)malloc(sizeof(Brother));//动态开辟空间 
+	strcpy(b1->node,node);//赋值 
+	b1->next=NULL;//初始化 
+	if(br==NULL) //之前没有兄弟    node就是第一个兄弟节点
+	{
+		br=b1;
+	}
+	else//之前有兄弟节点    node就是最后一个兄弟节点
+	{
+		b2=br;
+		while(b2->next)
+		{
+			b2=b2->next;
+		}
+		b2->next=b1;
+	}
+	return br;//返回兄弟节点指针 
+}
+
+Tree *Form_Pa_Ch(Node pa,Brother *br)//双亲节点和兄弟节点构成子树 
+{
+	Tree *parent;
+	parent=(Tree *)malloc(sizeof(Tree));//动态开辟空间 
+	strcpy(parent->node,pa);//赋值
+	parent->children=br;//兄弟节点和双亲节点构成子树 
+	parent->next=NULL;
+	return parent;//返回带兄弟节点的双亲结点，即子树 
+}
+
+Tree *AddParentToTree(Tree *tree,Tree *parent)//双亲节点加入到树中 
+{
+	Tree *t=tree;//临时树 
+	if(t==NULL) //树不存在 
+	{
+		tree=parent;//带兄弟节点的双亲节点即为树 
+	}
+	else//树存在 
+	{
+		while(t->next) 
+		{
+			t=t->next;
+		}
+		t->next=parent;//带兄弟节点的双亲节点加入到树的最后 
+	}
+	return tree;//返回树指针 
+}
+
+Brother *ClearBrothers(Brother *br)//回收兄弟节点空间(删除兄弟节点)
+{
+	Brother *b=br;//临时兄弟节点 
+	while(br)
+	{
+		b=br;
+		br=br->next;
+		free(b);//回收空间 
+	}
+	return br;//返回NULL
+}
+
+Tree *ClearTree(Tree *tree)//回收树空间
+{
+	Tree *tr=tree;//临时树
+	while(tree)
+	{
+		tr=tree;
+		tree=tree->next;
+		free(tr);//回收空间
+	}
+	return tree;//返回NULL
+} 
+
+void CreateStr(char *str)//文本字符数组转换为多个字符串
+{
+	char *s=str;//临时字符串
+	while(*s)
+	{
+		if(*s=='/') //如果是'/'，化为字符串结束标记'\0' 
+		{
+			*s='\0';
+		}	
+		s++;
+	}
+	s++;
+	*s='\0';//结尾加一个结束标记 
+}
+
+Brother *CreateBrothers(Brother *brothers,char *str)//字符数组构成兄弟节点群 
+{
+	char *p=str;//多个节点，'/'分隔 
+	Node node;
+	CreateStr(str);//变为多个字符串 
+	while(*p)
+	{
+		strcpy(node,p); //读取节点
+		brothers=AddABrother(brothers,node);//加入兄弟关系中 
+		p+=strlen(node)+1;//下一个节点 
+	}
+	return brothers;//返回兄弟节点链表 
+}
+
+Tree *CreatTree(Tree *tree,char *filename)//根据树文件创建树 
+{
+	FILE *fp;
+	if((fp=fopen(filename,"r"))==NULL)//文件打开失败 
+	{
+		printf("文件打开失败!\n");
+		return NULL;
+	}	
+	char p[100],b[5000];
+	Brother *brothers=NULL;//进行初始化 
+	Tree *tree1=NULL;
+	while(!(feof(fp)))//文件中是否还存在树的节点名称
+	{
+		fscanf(fp,"%s",p);//读入双亲节点
+		fscanf(fp,"%s",b);//读入若干个兄弟节点，'/'分隔 
+		brothers=NULL;
+		brothers=CreateBrothers(brothers,b);//构建双亲节点
+		tree1=Form_Pa_Ch(p,brothers);//构建子树 
+		tree=AddParentToTree(tree,tree1);//树中加入子树 
+	}
+	fclose(fp);//关闭文件 
+	return tree;//返回所建的树 
+}
+
+Brother *CopyBrothers(Brother *children)//复制全部节点 
+{
+	Brother *head=NULL,*p=NULL,*p1=NULL;
+	while(children)
+	{
+		
+		p=(Brother *)malloc(sizeof(Brother));//分配空间 
+		p->next=NULL;
+		strcpy(p->node,children->node);//复制节点
+		if(head==NULL)//第一个节点  
+			head=p;
+		else //建立链接，复制节点集
+			p1->next=p;
+		p1=p;
+		children=children->next;//下一个子节点
+	}
+	return head;//返回头节点指针
+}
+
+Brother *GetChiledren(Tree *tree,Node pa)//找该节点的所有子节点，并复制子节点 
+{
+	Brother *children=NULL;//孩子节点
+	Tree *t=tree;//树 
+	while(t)//节点不为空 
+	{ 
+		if(strcmp(t->node,pa)==0)//找到分支节点
+		{
+			children=CopyBrothers(t->children);//复制子节点集 
+			break;
+		}
+		t=t->next;//下一个双亲节点
+	}
+	return children;
+}
+
+Path *AddNodeToPath(Node node,Path *path)//头插法将节点加入路径 
+{
+	Brother *p;
+	p=(Brother *)malloc(sizeof(Brother));//动态开辟空间 
+	strcpy(p->node,node);
+	p->next=NULL;
+	if(path==NULL)//之前没有路径 
+	{
+		p->next=NULL;
+	}
+	else //之前有路径 
+	{
+		p->next=path;
+	}
+	path=p;
+	return path;
+}
+
+Path *CopyPath(Path *path)//复制路径 
+{
+	Brother *tempath;
+	tempath=CopyBrothers(path);//路径与兄弟节点集相同 
+	return tempath;	
+}
+
+Paths *CopyPaths(Paths *paths)//路径集拷贝 
+{
+	Paths *head=NULL,*p,*p1;
+	while(paths)//路径集不为空
+	{
+		p=(Paths *)malloc(sizeof(Paths));//开辟路径节点空间 
+		p->next=NULL;//复制路径 
+		p->path=CopyPath(paths->path);//复制一条路径 
+		if(head==NULL)//第一条路径 
+		{ 
+			head=p;
+		}
+		else//其他路径 
+		{
+			p1->next=p;
+		}
+		p1=p;//加入路径集合 
+		paths=paths->next ;
+	}
+	return head;
+}
+
+Paths *AddAPathToPaths(Path *path,Paths *paths)//尾插法把路径加入到路径集
+{
+	Path *copypath=NULL;
+	Paths *p=NULL,*p1=NULL;
+	if(path==NULL)//没有路径 
+	{
+		return paths;
+	}
+	copypath=CopyPath(path);//复制路径 
+	p=(Paths *)malloc(sizeof(Paths));//开辟路径集合空间 
+	p->next=NULL;
+	p->path=copypath;//复制的路径置入 
+	if(paths==NULL)//之前没有路径 （路径集为空） 
+	{
+		paths=p;
+	}
+	else //之前有路径（路径集不为空）  尾插法 
+	{
+		p1=paths;
+		while(p1->next)
+		{
+			p1=p1->next;
+		}
+		p1->next=p; 
+	}
+	return paths;
+}
+
+Path *RevPath(Path *path)//路径倒序 
+{
+	Brother *p,*p1;
+	p=path->next;
+	path->next=NULL;
+	while(p)//路径倒序
+	{
+		p1=p->next;
+		p->next=path;
+		path=p;
+		p=p1;
+	}
+	return path;
+}
+
+void PutPath(Path *path)//显示路径 
+{
+	Path *p=path;
+	while(p)
+	{
+		if(p->next!=NULL)
+		{
+			printf("%s-->",p->node);
+		}
+		else 
+		{
+			printf("%s",p->node);
+		}
+		p=p->next;
+	}
+	printf("\n");
+} 
+
+Paths *FormPaths(Brother *brothers,Path *path,Paths *paths)//兄弟群加入路径
+{
+	Brother *tempath;
+	while(brothers)//存在节点 
+	{
+		tempath=CopyPath(path);//复制路径 
+		tempath=AddNodeToPath(brothers->node,tempath);//节点加入路径 
+		paths=AddAPathToPaths(tempath,paths);//路径加入路径集 
+		brothers=brothers->next;//下一个节点 
+	}
+	return paths;//返回路径集合 
+}
+
+Path *ClearPath(Path *path)//清除路径 
+{
+	path=ClearBrothers(path);// Path与 Brothers形式相同 
+	return path;
+}
+
+Paths *ClearPaths(Paths *paths)//清除路径集 
+{
+	Paths *p;
+	while(paths)//存在路径集 
+	{
+		p=paths;
+		ClearPath(p->path);//回收一条路径 
+		paths=paths->next;//下一条路径 
+		free(p);//释放内存 
+	}
+	return paths;
+}
+
+Stack *ClearStack(Stack *stack)//清除堆栈回收堆栈空间 
+{
+	return ClearPaths(stack);//堆栈和路径类型相同  复用函数 
+}
+
+Stack *PushAPath(Stack *stack,Path *path)//一条路径压入堆栈
+{
+	Path *tempath;
+	Paths *st;
+	tempath=CopyPath(path);//复制路径 
+	st=(Paths *)malloc(sizeof(Paths));//开辟路径节点空间 
+	st->path=tempath;//路径放入堆栈 
+	if(stack==NULL) //第一条路径 
+		st->next=NULL;
+	else //已有路径 
+		st->next=stack;
+	stack=st;
+	return stack;
+}
+
+Stack *PushPaths(Stack *stack,Paths *paths)//把路径集压入堆栈
+{
+	Paths *p,*head;
+	head=CopyPaths(paths);//复制路径集合 
+	p=head;
+	if(p)//逐一加入堆栈 
+	{
+		while(p->next)
+			p=p->next;
+		p->next=stack;
+		stack=head; 
+	}
+	return stack;
+}
+
+Stack *PopANode(Stack *stack,Node node,Path **path)// 出栈，并获取路径和路径的节点名称 
+{
+	Paths *p=stack;
+	Path *tempath;
+	if(p)
+	{
+		tempath=p->path;//一条路径 
+		strcpy(node,tempath->node);//获取节点 
+		*path=CopyPath(tempath);//获取路径 
+		stack=p->next;//栈顶变化 
+		free(p);//删除路径 
+	}
+	return stack;//返回堆栈头指针 
+}
+
+Status SearchPath(Tree *tree,Node start,Node end,Path **path)//求解路径集 
+{
+	Node node;
+	Status flag=FALSE;//标识，默认为FALSE 
+	Brother *children=NULL;
+	Stack *stack=NULL,*stack1=NULL;
+	Paths *paths=NULL;
+	Path *tempath=NULL;
+	if(tree==NULL)//树不存在 
+	{
+		return NULL;
+	}
+	tempath=AddNodeToPath(start,tempath);//形成路径 
+	stack=PushAPath(stack,tempath);//路径进栈 
+	while(stack)//堆栈不为空继续搜索 
+	{
+		stack=PopANode(stack,node,&tempath);//出栈，获取树节点和路径 
+		if(strcmp(end,node)==0)//如果是目标节点 
+		{
+			flag=TRUE;//标识置为TRUE 
+			*path=CopyPath(tempath);
+			break;
+		}
+		children=GetChiledren(tree,node);
+		paths=FormPaths(children,tempath,paths);
+		stack=PushPaths(stack,paths);
+		paths=ClearPaths(paths);	
+	}
+	ClearStack(stack);
+	return flag;
+}
+
+void PutAllNode(Tree *tree)//显示所有节点 
+{
+	Tree *tree1=tree;
+	while(tree1)
+	{
+		printf("%s ",tree1->node);
+		tree1=tree1->next;
+	}
+	printf("\n");
+}
+
+int main() 
+{
+	char filename[50];
+	Tree *tree=NULL; 
+	Node start,end;
+	Paths *paths=NULL,*p=NULL;
+	Brother *path=NULL;
+	Status flag=FALSE;
+	printf("请输入树完整文件路径:");
+	scanf("%s",filename);
+	if((tree=CreatTree(tree,filename))==NULL)//打开文件失败 
+	{
+		return 0;
+	}
+	printf("该文件路径下树的所有节点：\n");
+	PutAllNode(tree);
+	printf("Start node:\n");
+	scanf("%s",start);
+	printf("End node:\n");
+	scanf("%s",end);
+	flag=SearchPath(tree,start,end,&path);
+	if(paths!=NULL) 
+	{
+		flag=TRUE;
+	}
+	printf(" Start node %s 到End node %s ，Status= %d \n",start,end,flag);
+	printf("Path：");
+	if(flag==TRUE)
+	{			
+		path=RevPath(path);
+		PutPath(path);	
+	}
+	else
+	{
+		printf("空\n");
+	}
+	printf("===============================================");
+}
